@@ -1,2 +1,2 @@
 #!/bin/bash
-./build-scripts.sh buildext
+./build-massmail-htmlizer.sh buildext
