@@ -19,7 +19,7 @@ class MassEmail extends \Espo\Modules\Crm\Services\MassEmail
         $this->addDependency('number');
         $this->addDependency('entityManager');
 
-	$this->targetsLinkList = ['contacts', 'users'];
+	#$this->targetsLinkList = ['contacts', 'users'];
     }
 
     protected function getPreparedEmail(
