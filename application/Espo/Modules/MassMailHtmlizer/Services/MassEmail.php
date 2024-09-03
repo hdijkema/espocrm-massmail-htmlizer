@@ -23,7 +23,8 @@ class MassEmail extends \Espo\Modules\Crm\Services\MassEmail
     }
 
     protected function getPreparedEmail(
-       Entity $queueItem, Entity $massEmail, Entity $emailTemplate, Entity $target, iterable $trackingUrlList = Array) : ?Email 
+       Entity $queueItem, Entity $massEmail, Entity $emailTemplate, Entity $target, iterable $trackingUrlList = []
+      ) : ?\Espo\Entities\Email 
     {
        $email = parent::getPreparedEmail($queueItem, $massEmail, $emailTemplate, $target, $trackingUrlList);
 
