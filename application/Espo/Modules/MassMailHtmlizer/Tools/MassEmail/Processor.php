@@ -1,31 +1,39 @@
 <?php
-namespace Espo\Modules\MassMailHtmlizer\Services;
+namespace Espo\Modules\MassMailHtmlizer\Tools\MassEmail;
 
 use Espo\ORM\Entity;
 use \Espo\Core\Htmlizer\Htmlizer;
 
-class MassEmail extends \Espo\Modules\Crm\Services\MassEmail
+class MassEmail extends \Espo\Modules\Crm\Tools\MassEmail\Processor
 {
     private $standard_relations = [ 'queueItems', 'inboundEmail', 'excludingTargetLists', 'targetLists', 'campaign', 'modifiedBy', 'createdBy', 'emailTemplate' ];
 
-    protected function init()
-    {
-        parent::init();
-        $this->addDependency('fileManager');
-        $this->addDependency('acl');
-        $this->addDependency('metadata');
-        $this->addDependency('serviceFactory');
-        $this->addDependency('dateTime');
-        $this->addDependency('number');
-        $this->addDependency('entityManager');
+    public function __construct(
+        Config $config,
+        ServiceFactory $serviceFactory,
+        EntityManager $entityManager,
+        Language $defaultLanguage,
+        EmailSender $emailSender
+    ) {
+        parent::__construct($config, $serviceFactory, $entityManager, $defaultLanguage, $emailSender);
 
-	#$this->targetsLinkList = ['contacts', 'users'];
+        #$this->addDependency('fileManager');
+        #$this->addDependency('acl');
+        #$this->addDependency('metadata');
+        #$this->addDependency('serviceFactory');
+        #$this->addDependency('dateTime');
+        #$this->addDependency('number');
+        #$this->addDependency('entityManager');
     }
 
-    protected function getPreparedEmail(
-       Entity $queueItem, Entity $massEmail, Entity $emailTemplate, Entity $target, iterable $trackingUrlList = []
-      ) : ?\Espo\Entities\Email 
-    {
+     protected function getPreparedEmail(
+        Entity $queueItem,
+        Entity $massEmail,
+        Entity $emailTemplate,
+        Entity $target,
+        iterable $trackingUrlList = []
+    ) : ?Email {
+
        $email = parent::getPreparedEmail($queueItem, $massEmail, $emailTemplate, $target, $trackingUrlList);
 
        $body = $email->get('body');
@@ -51,17 +59,4 @@ class MassEmail extends \Espo\Modules\Crm\Services\MassEmail
        return $email;
     }
 
-    protected function createHtmlizer()
-    {
-        return new Htmlizer(
-            $this->getFileManager(),
-            $this->getInjection('dateTime'),
-            $this->getInjection('number'),
-            $this->getAcl(),
-            $this->getInjection('entityManager'),
-            $this->getInjection('metadata'),
-            $this->getInjection('defaultLanguage'),
-            $this->getInjection('config')
-        );
-    }
 }
