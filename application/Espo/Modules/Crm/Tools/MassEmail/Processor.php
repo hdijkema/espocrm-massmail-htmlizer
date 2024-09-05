@@ -3,7 +3,7 @@
  * This file is part of EspoCRM.
  *
  * EspoCRM - Open Source CRM application.
- * Copyright (C) 2014-2021 Yurii Kuznietsov, Taras Machyshyn, Oleksii Avramenko
+ * Copyright (C) 2014-2022 Yurii Kuznietsov, Taras Machyshyn, Oleksii Avramenko
  * Website: https://www.espocrm.com
  *
  * EspoCRM is free software: you can redistribute it and/or modify
@@ -32,7 +32,6 @@ namespace Espo\Modules\Crm\Tools\MassEmail;
 use Laminas\Mail\Message;
 
 use Espo\Entities\EmailTemplate;
-use Espo\Modules\Crm\Entities\MassEmail;
 use Espo\Repositories\EmailAddress as EmailAddressRepository;
 use Espo\Modules\MassMailHtmlizer\Tools\MassEmail\Processor as MassMailHtmlizerProcessor;
 
@@ -51,6 +50,8 @@ use Espo\Core\{
 use Espo\{
     Modules\Crm\Entities\EmailQueueItem,
     Modules\Crm\Entities\Campaign,
+    Modules\Crm\Entities\MassEmail,
+    Modules\Crm\Entities\CampaignTrackingUrl,
     Modules\Crm\Services\Campaign as CampaignService,
     Services\EmailTemplate as EmailTemplateService,
     ORM\Entity,
@@ -78,11 +79,11 @@ class Processor
 
     protected const MAX_PER_HOUR_COUNT = 10000;
 
-    private $campaignService = null;
+    private ?CampaignService $campaignService = null;
 
-    private $emailTemplateService = null;
+    private ?EmailTemplateService $emailTemplateService = null;
 
-    protected $log;
+    protected Log $log;
 
     public function __construct(
         Config $config,
@@ -111,9 +112,9 @@ class Processor
             $threshold->modify('-1 hour');
 
             $sentLastHourCount = $this->entityManager
-                ->getRDBRepository('EmailQueueItem')
+                ->getRDBRepository(EmailQueueItem::ENTITY_TYPE)
                 ->where([
-                    'status' => 'Sent',
+                    'status' => EmailQueueItem::STATUS_SENT,
                     'sentAt>' => $threshold->format('Y-m-d H:i:s'),
                 ])
                 ->count();
@@ -126,9 +127,9 @@ class Processor
         }
 
         $queueItemList = $this->entityManager
-            ->getRDBRepository('EmailQueueItem')
+            ->getRDBRepository(EmailQueueItem::ENTITY_TYPE)
             ->where([
-                'status' => 'Pending',
+                'status' => EmailQueueItem::STATUS_PENDING,
                 'massEmailId' => $massEmail->getId(),
                 'isTest' => $isTest,
             ])
@@ -159,7 +160,7 @@ class Processor
             return;
         }
 
-        /** @var iterable<\Espo\Entities\Attachment> */
+        /** @var iterable<\Espo\Entities\Attachment> $attachmentList */
         $attachmentList = $this->entityManager
             ->getRDBRepository('EmailTemplate')
             ->getRelation($emailTemplate, 'attachments')
@@ -187,6 +188,7 @@ class Processor
                 );
             }
 
+            /** @var \Espo\Services\InboundEmail $inboundEmailService */
             $inboundEmailService = $this->serviceFactory->create('InboundEmail');
 
             $smtpParams = $inboundEmailService->getSmtpParamsFromAccount($inboundEmail);
@@ -216,22 +218,25 @@ class Processor
 
         if (!$isTest) {
             $countLeft = $this->entityManager
-                ->getRDBRepository('EmailQueueItem')
+                ->getRDBRepository(EmailQueueItem::ENTITY_TYPE)
                 ->where([
-                    'status' => 'Pending',
+                    'status' => EmailQueueItem::STATUS_PENDING,
                     'massEmailId' => $massEmail->getId(),
                     'isTest' => false,
                 ])
                 ->count();
 
             if ($countLeft == 0) {
-                $massEmail->set('status', 'Complete');
+                $massEmail->set('status', MassEmail::STATUS_COMPLETE);
 
                 $this->entityManager->saveEntity($massEmail);
             }
         }
     }
 
+    /**
+     * @param iterable<CampaignTrackingUrl> $trackingUrlList
+     */
     protected function getPreparedEmail(
         EmailQueueItem $queueItem,
         MassEmail $massEmail,
@@ -252,7 +257,7 @@ class Processor
 
         $optOutLink =
             '<a href="' . $optOutUrl . '">' .
-            $this->defaultLanguage->translate('Unsubscribe', 'labels', 'Campaign') .
+            $this->defaultLanguage->translateLabel('Unsubscribe', 'labels', 'Campaign') .
             '</a>';
 
         $body = str_replace('{optOutUrl}', $optOutUrl, $body);
@@ -277,7 +282,7 @@ class Processor
             }
         }
 
-        $trackImageAlt = $this->defaultLanguage->translate('Campaign', 'scopeNames');
+        $trackImageAlt = $this->defaultLanguage->translateLabel('Campaign', 'scopeNames');
 
         $trackOpenedUrl = $this->getSiteUrl() . '?entryPoint=campaignTrackOpened&id=' . $queueItem->getId();
 
@@ -292,7 +297,7 @@ class Processor
 
         $emailData['body'] = $body;
 
-        $email = $this->entityManager->getEntity('Email');
+        $email = $this->entityManager->getNewEntity('Email');
 
         $email->set($emailData);
 
@@ -317,6 +322,9 @@ class Processor
         return $email;
     }
 
+    /**
+     * @param array<string,mixed> $params
+     */
     protected function prepareQueueItemMessage(
         EmailQueueItem $queueItem,
         Sender $sender,
@@ -352,22 +360,22 @@ class Processor
         }
     }
 
-    protected function setFailed(Entity $massEmail): void
+    protected function setFailed(MassEmail $massEmail): void
     {
-        $massEmail->set('status', 'Failed');
+        $massEmail->set('status', MassEmail::STATUS_FAILED);
 
         $this->entityManager->saveEntity($massEmail);
 
         $queueItemList = $this->entityManager
-            ->getRDBRepository('EmailQueueItem')
+            ->getRDBRepository(EmailQueueItem::ENTITY_TYPE)
             ->where([
-                'status' => 'Pending',
+                'status' => EmailQueueItem::STATUS_PENDING,
                 'massEmailId' => $massEmail->getId(),
             ])
             ->find();
 
         foreach ($queueItemList as $queueItem) {
-            $queueItem->set('status', 'Failed');
+            $queueItem->set('status', EmailQueueItem::STATUS_FAILED);
 
             $this->entityManager->saveEntity($queueItem);
         }
@@ -375,6 +383,7 @@ class Processor
 
     /**
      * @param iterable<\Espo\Entities\Attachment> $attachmentList
+     * @param ?array<string,mixed> $smtpParams
      */
     protected function sendQueueItem(
         EmailQueueItem $queueItem,
@@ -386,26 +395,33 @@ class Processor
         $smtpParams = null
     ): bool {
 
-        $queueItemFetched = $this->entityManager->getEntity($queueItem->getEntityType(), $queueItem->getId());
+        $queueItemFetched = $this->entityManager->getEntityById($queueItem->getEntityType(), $queueItem->getId());
 
-        if ($queueItemFetched->get('status') !== 'Pending') {
+        if (
+            !$queueItemFetched ||
+            $queueItemFetched->get('status') !== EmailQueueItem::STATUS_PENDING
+        ) {
             return false;
         }
 
-        $queueItem->set('status', 'Sending');
+        $queueItem->set('status', EmailQueueItem::STATUS_SENDING);
 
         $this->entityManager->saveEntity($queueItem);
 
         $target = $this->entityManager->getEntity($queueItem->get('targetType'), $queueItem->get('targetId'));
 
-        $emailAddress = $target->get('emailAddress');
+        $emailAddress = null;
+
+        if ($target) {
+            $emailAddress = $target->get('emailAddress');
+        }
 
         if (
             !$target ||
-            !$target->getId() ||
+            !$target->hasId() ||
             !$emailAddress
         ) {
-            $queueItem->set('status', 'Failed');
+            $queueItem->set('status', EmailQueueItem::STATUS_FAILED);
 
             $this->entityManager->saveEntity($queueItem);
 
@@ -419,7 +435,7 @@ class Processor
 
         if ($emailAddressRecord) {
             if ($emailAddressRecord->get('invalid') || $emailAddressRecord->get('optOut')) {
-                $queueItem->set('status', 'Failed');
+                $queueItem->set('status', EmailQueueItem::STATUS_FAILED);
 
                 $this->entityManager->saveEntity($queueItem);
 
@@ -427,9 +443,11 @@ class Processor
             }
         }
 
+        /** @var CampaignTrackingUrl[] $trackingUrlList */
         $trackingUrlList = [];
 
         if ($campaign) {
+            /** @var \Espo\ORM\Collection<CampaignTrackingUrl> $trackingUrlList */
             $trackingUrlList = $this->entityManager
                 ->getRDBRepository('Campaign')
                 ->getRelation($campaign, 'trackingUrls')
@@ -449,7 +467,7 @@ class Processor
         if ($campaign) {
             $email->setLinkMultipleIdList(
                 'teams',
-                $campaign->getLinkMultipleIdList('teams')
+                $campaign->getLinkMultipleIdList('teams') ?? []
             );
         }
 
@@ -490,10 +508,10 @@ class Processor
             $maxAttemptCount = $this->config->get('massEmailMaxAttemptCount', self::MAX_ATTEMPT_COUNT);
 
             if ($queueItem->get('attemptCount') >= $maxAttemptCount) {
-                $queueItem->set('status', 'Failed');
+                $queueItem->set('status', EmailQueueItem::STATUS_FAILED);
             }
             else {
-                $queueItem->set('status', 'Pending');
+                $queueItem->set('status', EmailQueueItem::STATUS_PENDING);
             }
 
             $this->entityManager->saveEntity($queueItem);
@@ -513,7 +531,7 @@ class Processor
 
         $queueItem->set('emailAddress', $target->get('emailAddress'));
 
-        $queueItem->set('status', 'Sent');
+        $queueItem->set('status', EmailQueueItem::STATUS_SENT);
         $queueItem->set('sentAt', date('Y-m-d H:i:s'));
 
         $this->entityManager->saveEntity($queueItem);
@@ -536,7 +554,10 @@ class Processor
     protected function getEmailTemplateService(): EmailTemplateService
     {
         if (!$this->emailTemplateService) {
-            $this->emailTemplateService = $this->serviceFactory->create('EmailTemplate');
+            /** @var EmailTemplateService $service */
+            $service = $this->serviceFactory->create('EmailTemplate');
+
+            $this->emailTemplateService = $service;
         }
 
         return $this->emailTemplateService;
@@ -545,7 +566,10 @@ class Processor
     protected function getCampaignService(): CampaignService
     {
         if (!$this->campaignService) {
-            $this->campaignService = $this->serviceFactory->create('Campaign');
+            /** @var CampaignService $service */
+            $service = $this->serviceFactory->create('Campaign');
+
+            $this->campaignService = $service;
         }
 
         return $this->campaignService;
