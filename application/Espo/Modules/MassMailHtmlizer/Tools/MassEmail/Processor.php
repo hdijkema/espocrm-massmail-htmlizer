@@ -2,39 +2,16 @@
 namespace Espo\Modules\MassMailHtmlizer\Tools\MassEmail;
 
 use Espo\ORM\Entity;
-use \Espo\Core\Htmlizer\Htmlizer;
+use Espo\Entities\Email;
 
-class MassEmail extends \Espo\Modules\Crm\Tools\MassEmail\Processor
+class Processor 
 {
     private $standard_relations = [ 'queueItems', 'inboundEmail', 'excludingTargetLists', 'targetLists', 'campaign', 'modifiedBy', 'createdBy', 'emailTemplate' ];
 
-    public function __construct(
-        Config $config,
-        ServiceFactory $serviceFactory,
-        EntityManager $entityManager,
-        Language $defaultLanguage,
-        EmailSender $emailSender
-    ) {
-        parent::__construct($config, $serviceFactory, $entityManager, $defaultLanguage, $emailSender);
-
-        #$this->addDependency('fileManager');
-        #$this->addDependency('acl');
-        #$this->addDependency('metadata');
-        #$this->addDependency('serviceFactory');
-        #$this->addDependency('dateTime');
-        #$this->addDependency('number');
-        #$this->addDependency('entityManager');
-    }
-
-     protected function getPreparedEmail(
-        Entity $queueItem,
-        Entity $massEmail,
-        Entity $emailTemplate,
-        Entity $target,
-        iterable $trackingUrlList = []
+    public function getPreparedEmail(
+        Email $email,
+        Entity $massEmail
     ) : ?Email {
-
-       $email = parent::getPreparedEmail($queueItem, $massEmail, $emailTemplate, $target, $trackingUrlList);
 
        $body = $email->get('body');
        $subject = $email->get('subject');
