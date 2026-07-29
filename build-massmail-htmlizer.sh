@@ -43,7 +43,7 @@ if [ "$CMD" = "install" ]; then
     )
 
     case "$CRM_VERSION" in
-        9.0.8|9.1.9)
+        9.0.8|9.1.9|9.2.7)
             PATCHER="./tools/patch-sending-processor-$CRM_VERSION.php"
             ;;
         *)

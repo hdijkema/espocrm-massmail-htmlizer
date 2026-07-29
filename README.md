@@ -13,7 +13,7 @@ example:
 
 ## Supported EspoCRM versions
 
-The extension supports EspoCRM 9.0.8 and 9.1.9.
+The extension supports EspoCRM 9.0.8, 9.1.9 and 9.2.7.
 
 The EspoCRM core `SendingProcessor.php` is not included in the extension.
 Installation applies a small, version-checked integration patch to the clean
